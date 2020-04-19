@@ -1,0 +1,138 @@
+import sys
+from getopt import getopt, GetoptError
+from opal import opal
+
+help = """
+seqOPAL command line options:
+Name | Type  | Default | Explanation
+-----|-------|---------|---------------
+ -i  | str   |         | input file, should be fasta format, must be specified.
+ -o  | str   | ""      | output file, features will be stored here, optional.
+ -l  | str   | ""      | label file, contains labels for training data.
+ -k  | int   | 64      | length of kmer to use.
+ -p  | float | 0.25    | percentage of locations in kmer to use.
+ -n  | int   | 8       | number of hashes to use in LDPC matrix.
+ -c  | int   | 1       | approximate coverage of reads in fragments.
+ -f  | int   | 200     | length of fragments.
+ -s  | None  | Unset   | if set, the ldpc matrix will be saved.
+ -r  | None  | Unset   | if set, a previous ldpc matrix will be reused.
+ -S  | None  | Unset   | if set, shuffle the data before writing it out.
+
+-i can also be specified without the option name eg:
+>> seqc main.seq input.fasta -o output.file -l labels.txt -k 16
+If an unamed parameter and -i are both specified, -i takes precedence
+
+If -r or -s are set, the input_file with extension changed to '.ldcp' will be
+used to store the ldpc matrix.
+
+-S should only be set during training.
+
+If a label file is given, it is expected to contain a single label on each
+line, with the label on line i corresponding to read i in the given input
+fasta file.
+
+If the output file or ldpc file already exist, they will be overwritten."""
+
+# default argument values
+input_file = ""
+output_file = ""
+label_file = ""
+ldpc_file = ""
+kmer_length = 64
+percent_used = 0.25
+num_hashes = 8
+coverage = 1
+fragment_length = 64
+save_ldpc = False
+reuse_ldpc = False
+shuffle = False
+
+opts = list[tuple[str, str]]()
+args = list[str]()
+
+try:
+    opts, args = getopt(sys.argv[1:], "i:o:l:k:p:n:c:f:srS")
+except GetoptError:
+    raise GetoptError('Bad option name.\n' + help)
+
+if len(args) == 1:
+    input_file = args[0]
+elif len(args) > 0:
+    raise GetoptError('Unused unnamed arguments.\n' + help)
+
+for opt, val in opts:
+    match opt:
+        case "-i":
+            try:
+                f = open(val, 'r')
+            except IOError:
+                raise GetoptError(f'Input file {val} does not exist.\n' + help)
+            input_file = val
+        case "-o":
+            output_file = val
+        case "-l":
+            try:
+                f = open(val, 'r')
+            except IOError:
+                raise GetoptError(f'Label file {val} does not exist.\n' + help)
+            label_file = val
+        case "-k":
+            try:
+                kmer_length = int(val)
+            except ValueError:
+                raise GetoptError('-k kmer_length must be an int.\n' + help)
+        case "-p":
+            try:
+                percent_used = float(val)
+            except ValueError:
+                raise GetoptError('-p percent_used must be an int.\n' + help)
+        case "-n":
+            try:
+                num_hashes = int(val)
+            except ValueError:
+                raise GetoptError('-n num_hashes must be an int.\n' + help)
+        case "-c":
+            try:
+                coverage = int(val)
+            except ValueError:
+                raise GetoptError('-c coverage must be an int.\n' + help)
+        case "-f":
+            try:
+                fragment_length = int(val)
+            except ValueError:
+                raise GetoptError('-f fragment_length must be an int.\n' + help)
+        case "-s":
+            save_ldpc = True
+        case "-r":
+            reuse_ldpc = True
+        case "-S":
+            shuffle = True
+        case _:
+            raise GetoptError('\n' + help)
+
+if input_file == "":
+    raise GetoptError('-i input_file must be specified.\n' + help)
+
+path = ''.join(input_file.split('.')[:-1])
+if save_ldpc or reuse_ldpc:
+    ldpc_file =  path + '.ldpc'
+
+if reuse_ldpc:
+    try:
+        f = open(ldpc_file, 'r')
+        f.close()
+    except IOError:
+        raise GetoptError(f'-r set but {ldpc_file} does not exist.\n' + help)
+
+opal(infile=input_file,
+     outfile=output_file,
+     label_file=label_file,
+     ldpc_file=ldpc_file,
+     kmer_length=kmer_length,
+     percent_used=percent_used,
+     num_hashes=num_hashes,
+     coverage=coverage,
+     fragment_length=fragment_length,
+     save_ldpc=save_ldpc,
+     reuse_ldpc=reuse_ldpc,
+     shuffle=shuffle)

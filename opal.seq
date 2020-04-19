@@ -1,0 +1,141 @@
+import bio
+import math
+import random
+import sys
+from matrix import matrix, save, load
+
+counter = 0
+
+def ldpc(k: int, t: int, _m: int) -> matrix[int]:
+    """
+    Generateas a low density code matrix of 0's and 1's, then converts that to
+    a matirx of corresponding kmer indices.
+
+    k:      width of matrix / length of k-mer
+    t:      number of 1's per row / row_weight
+    _m:     minimum matrix height / number of hashes
+    """
+
+    if k % t != 0:
+        raise ValueError(f"k: ({k}) must be a multiple of t: ({t})")
+
+    m = (int(math.ceil(_m * 1.0 / (k / t)) + 1)) * (k // t)
+    w = m * t // k
+
+    H_basic = matrix[int]((m // w, k), 0)
+    H = matrix[int]((m, k), 0)
+
+    for i in range(m // w):
+        for j in range(i * t, (i + 1) * t):
+            H_basic[i, j] = 1
+            H[i, j] = 1
+
+    perm_idx = list(range(k))
+    for p in range(w - 1):
+        random.shuffle(perm_idx)
+        for pi in perm_idx:
+            idx1 = (m // w) + (p * H_basic.shape[0])
+            idx2 = idx1 + H_basic.shape[0]
+            H[idx1:idx2, :] = H_basic[:, perm_idx]
+
+    output = matrix[int]((H.shape[0], t))
+    for i in range(H.shape[0]):
+        count = 0
+        for j in range(H.shape[1]):
+            if H[i, j] == 1:
+                output[i, count] = j
+                count += 1
+    return output
+
+def one_hot_encode(labels) -> list[int]:
+    unique_labels = list[str]()
+    for elem in labels:
+        if elem not in unique_labels:
+            unique_labels.append(elem)
+    return [unique_labels.index(x) for x in labels]
+
+def draw_fragments(sequence: seq, length: int, coverage: int, labels: list[int]) -> tuple[seq, int]:
+    global counter
+    if len(sequence) <= length:
+        for i in range(coverage):
+            label = labels[counter] if len(labels) > 0 else -1
+            yield (sequence, label)
+        counter += 1
+    else:
+        curr_coverage = 0
+        target_coverage = coverage * len(sequence)
+        while curr_coverage < target_coverage:
+            pos = random.randint(0, len(sequence) - length)
+            sample = sequence[pos:pos + length]
+            curr_coverage += length
+            label = labels[counter] if len(labels) > 0 else -1
+            yield (sample, label)
+        counter += 1
+
+def custom_split(input: tuple[seq, int], kmer_length: int):
+    for kmer in split(input[0], kmer_length, 1):
+        yield (kmer, input[1])
+
+def index_kmer(input: tuple[seq, int], indices: matrix[int]):
+    output = ''
+    for i in range(indices.shape[0]):
+        for j in range(indices.shape[1]):
+            output += str(input[0][indices[i, j]])
+        output += f'{i} '
+    return (output[:-1], input[1])
+
+def format_sample(input: tuple[str, int]):
+    """
+    formats a sample and optional label for input to vowpal wabbit
+    """
+    if input[1] >= 0:
+        return f'{input[1]} | {input[0]}\n'
+    else:
+        return f'| {input[0]}\n'
+
+def opal(infile: str, outfile: str = "", label_file: str = "",
+         ldpc_file: str = "", kmer_length: int = 64, percent_used: float = 0.25,
+         num_hashes: int = 8, coverage: int = 15, fragment_length: int = 200,
+         save_ldpc: bool = False, reuse_ldpc: bool = False,
+         shuffle: bool = False):
+
+    indices = ldpc(kmer_length, int(percent_used * kmer_length), num_hashes)
+    if reuse_ldpc:
+        indices = load(ldpc_file)
+
+    if save_ldpc:
+        save(indices, ldpc_file)
+
+    labels = list[str]()
+    encoded_labels = list[int]()
+    if label_file != "":
+        labels = [x.rstrip('\n') for x in open(label_file, 'r').readlines()]
+        encoded_labels = one_hot_encode(labels)
+
+    f = sys.stdout
+    if outfile != "":
+        f = open(outfile, 'w')
+
+    if shuffle:
+        output = list[str]()
+        (bio.FASTA(infile, fai=False)
+            |> seqs
+            |> draw_fragments(fragment_length, coverage, encoded_labels)
+            |> custom_split(kmer_length)
+            |> index_kmer(indices)
+            |> format_sample
+            |> output.append)
+        random.shuffle(output)
+        for elem in output:
+            f.write(elem)
+    else:
+        (bio.FASTA(infile, fai=False)
+            |> seqs
+            |> draw_fragments(fragment_length, coverage, encoded_labels)
+            |> custom_split(kmer_length)
+            |> index_kmer(indices)
+            |> format_sample
+            |> f.write)
+
+    if outfile != "":
+        f.close()

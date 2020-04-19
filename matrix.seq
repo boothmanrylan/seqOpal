@@ -1,0 +1,352 @@
+class matrix[T]:
+    """
+    Basic 2d matrix class
+    Currently horrificly slow
+    """
+    arr: array[T]
+    shape: tuple[int, int]
+    _c: list[int]
+    _r: list[int]
+
+    # convert index like [i, j] to correct index in 1d array
+    def _getidx(self: matrix[T], i: int, j: int):
+        if not (i < len(self._r) and j < len(self._c)):
+            raise IndexError(
+                f"index ({i},{j}) is out of bounds for shape: {self.shape}"
+            )
+        return self._r[i] + self._c[j]
+
+    # generate matrix from other matrix components, used for __copy__ and load
+    def __init__(self: matrix[T], arr: array[T], shape: tuple[int, int],
+                 _c: list[int], _r: list[int]):
+        self.arr = arr
+        self.shape = shape
+        self._c = _c
+        self._r = _r
+
+    # generate empty matrix of given shape
+    def __init__(self: matrix[T], shape: tuple[int, int]):
+        self.shape = shape
+        self._c = list(range(self.shape[1]))
+        self._r = [x * self.shape[1] for x in range(self.shape[0])]
+        self.arr = array[T](self.shape[0] * self.shape[1])
+
+    # generate matrix of given shape with values filled in from list row by row
+    def __init__(self: matrix[T], shape: tuple[int, int], A: list[T]):
+        self.shape = shape
+        if not (self.shape[0] * self.shape[1] == len(A)):
+            raise ValueError(
+                f"cant create matrix of shape {self.shape} from {len(A)} items"
+            )
+        self._c = list(range(self.shape[1]))
+        self._r = [x * self.shape[1] for x in range(self.shape[0])]
+        self.arr = array[T](self.shape[0] * self.shape[1])
+        for i, elem in enumerate(A):
+            self.arr[i] = elem
+
+    # generate matrix of given shape with values filled in from array row by row
+    def __init__(self: matrix[T], shape: tuple[int, int], A: array[T]):
+        self.shape = shape
+        if not (self.shape[0] * self.shape[1] == len(A)):
+            raise ValueError(
+                f"cant create matrix of shape {self.shape} from {len(A)} items"
+            )
+        self._c = list(range(self.shape[1]))
+        self._r = [x * self.shape[1] for x in range(self.shape[0])]
+        self.arr = copy(A)
+
+    # generate matrix of given shape where every element is val
+    def __init__(self: matrix[T], shape: tuple[int, int], val: T):
+        self.shape = shape
+        self._c = list(range(self.shape[1]))
+        self._r = [x * self.shape[1] for x in range(self.shape[0])]
+        self.arr = array[T](self.shape[0] * self.shape[1])
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
+                self.arr[self._getidx(i, j)] = val
+
+    # generate matrix of given shape with values filled from generator row by row
+    def __init__(self: matrix[T], shape: tuple[int, int], it: generator[T]):
+        self.shape = shape
+        self._c = list(range(self.shape[1]))
+        self._r = [x * self.shape[1] for x in range(self.shape[0])]
+        self.arr = array[T](self.shape[0] * self.shape[1])
+        i = 0
+        for elem in it:
+            self.arr[i] = elem
+            i += 1
+        if i != self.shape[0] * self.shape[1]:
+            raise ValueError(
+                f"cant create matrix of shape {self.shape} from {i} items"
+            )
+
+    def __len__(self: matrix[T]):
+        return self.shape[0]
+
+    def __bool__(self: matrix[T]):
+        if self.shape[0] * self.shape[1] > 1:
+            raise ValueError(
+                f"truth value of matrix with more than one element is ambigious"
+            )
+        else:
+            return bool(self.arr[0])
+
+    def __eq__(self: matrix[T], other: matrix[T]):
+        if self.shape[0] != other.shape[0] or self.shape[1] != other.shape[1]:
+            return False
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
+                if self[i, j] != other[i, j]:
+                    return False
+        return True
+
+    def __ne__(self: matrix[T], other: matrix[T]):
+        return not (self == other)
+
+    def __iter__(self: matrix[T]):
+        i = 0
+        j = 0
+        while i < self.shape[0]:
+            while j < self.shape[1]:
+                yield self.arr[self._getidx(i, j)]
+                j += 1
+            i += 1
+
+    def __contains__(self: matrix[T], x: T):
+        for a in self:
+            if a == x:
+                return True
+        return False
+
+    def __copy__(self: matrix[T]):
+        return matrix[T](self.arr.__copy__(), self.shape,
+                         self._c.__copy__(), self._r.__copy__())
+
+    def __getitem__(self: matrix[T], pos: tuple[int, int]):
+        return self.arr[self._getidx(pos[0], pos[1])]
+
+    def __getitem__(self: matrix[T], pos: tuple[eslice, int]):
+        return matrix[T]((self.shape[0], 1), [self.arr[self._getidx(x, pos[1])]
+                                              for x in range(self.shape[0])])
+
+    def __getitem__(self: matrix[T], pos: tuple[slice, int]):
+        start, stop, step, length = slice.adjust_indices(self.shape[0],
+                                                         start=pos[0].start,
+                                                         stop=pos[0].end)
+        return matrix[T]((length, 1), [self.arr[self._getidx(x + start, pos[1])]
+                                       for x in range(start, stop, step)])
+
+    def __getitem__(self: matrix[T], pos: tuple[int, eslice]):
+        return matrix[T]((1, self.shape[1]), [self.arr[self._getidx(pos[0], x)]
+                                              for x in range(self.shape[1])])
+
+    def __getitem__(self: matrix[T], pos: tuple[int, slice]):
+        start, stop, step, length = slice.adjust_indices(self.shape[1],
+                                                         start=pos[1].start,
+                                                         stop=pos[1].end)
+        return matrix[T]((1, length), [self.arr[self._getidx(pos[0], x + start)]
+                                       for x in range(start, stop, step)])
+
+    def __getitem__(self: matrix[T], pos: tuple[slice, slice]):
+        start0, stop0, step0, length0 = slice.adjust_indices(self.shape[0],
+                                                             start=pos[0].start,
+                                                             stop=pos[0].end)
+        start1, stop1, step1, length1 = slice.adjust_indices(self.shape[1],
+                                                             start=pos[1].start,
+                                                             stop=pos[1].end)
+        out = list[T]()
+        for i in range(start0, stop0, step0):
+            for j in range(start1, stop1, step1):
+                out.append(self.arr[self._getidx(i, j)])
+        return matrix[T]((length0, length1), out)
+
+    def __getitem__(self: matrix[T], pos: tuple[eslice, slice]):
+        start, stop, step, length = slice.adjust_indices(self.shape[1],
+                                                         start=pos[1].start,
+                                                         stop=pos[1].end)
+        out = list[T]()
+        for i in range(self.shape[0]):
+            for j in range(start, stop, step):
+                out.append(self.arr[self._getidx(i, j)])
+        return matrix[T]((self.shape[0], length), out)
+
+
+    def __getitem__(self: matrix[T], pos: tuple[slice, eslice]):
+        start, stop, step, length = slice.adjust_indices(self.shape[0],
+                                                         start=pos[0].start,
+                                                         stop=pos[0].end)
+        out = list[T]()
+        for i in range(start, stop, step):
+            for j in range(self.shape[1]):
+                out.append(self.arr[self._getidx(i, j)])
+        return matrix[T]((length, self.shape[1]), out)
+
+    def __getitem__(self: matrix[T], pos: tuple[eslice, eslice]):
+        return self.__copy__()
+
+    def __getitem__(self: matrix[T], pos: tuple[eslice, list[int]]):
+        out = list[T]()
+        for i in range(self.shape[0]):
+            for j in pos[1]:
+                out.append(self.arr[self._getidx(i, j)])
+        return matrix[T]((self.shape[0], len(pos[1])), out)
+
+    def __getitem__(self: matrix[T], pos: tuple[list[int], eslice]):
+        out = list[T]()
+        for i in pos[0]:
+            for j in range(self.shape[0]):
+                out.append(self.arr[self._getidx(i, j)])
+        return matrix[T]((self.shape[0], len(pos[1])), out)
+
+    def __setitem__(self: matrix[T], pos: tuple[int, int], x: T):
+        self.arr[self._getidx(pos[0], pos[1])] = x
+
+    def __setitem__(self: matrix[T], pos: tuple[int, eslice], x: matrix[T]):
+        if x.shape[0] != 1 or x.shape[1] != self.shape[1]:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {(1, self.shape[1])}"
+            )
+        for j in range(self.shape[1]):
+            self.arr[self._getidx(pos[0], j)] = x[0, j]
+
+    def __setitem__(self: matrix[T], pos: tuple[int, slice], x: matrix[T]):
+        start, stop, step, length = slice.adjust_indices(self.shape[1],
+                                                         start=pos[1].start,
+                                                         stop=pos[1].end)
+        if x.shape[0] != 1 or x.shape[1] != length:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {(1, length)}"
+            )
+        for idx, j in enumerate(range(start, stop, step)):
+            self.arr[self._getidx(pos[0], j)] = x[0, idx]
+
+    def __setitem__(self: matrix[T], pos: tuple[eslice, int], x: matrix[T]):
+        if x.shape[0] != self.shape[0] or x.shape[1] != 1:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {(self.shape[0], 1)}"
+            )
+        for i in range(self.shape[0]):
+            self.arr[self._getidx(i, pos[1])] = x[i, 0]
+
+    def __setitem__(self: matrix[T], pos: tuple[slice, int], x: matrix[T]):
+        start, stop, step, length = slice.adjust_indices(self.shape[0],
+                                                         start=pos[0].start,
+                                                         stop=pos[0].end)
+        if x.shape[0] != length or x.shape[1] != 1:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {(length, 1)}"
+            )
+        for idx, i in enumerate(range(start, stop, step)):
+            self.arr[self._getidx(i, pos[1])] = x[idx, 0]
+
+    def __setitem__(self: matrix[T], pos: tuple[slice, slice], x: matrix[T]):
+        start0, stop0, step0, length0 = slice.adjust_indices(self.shape[0],
+                                                             start=pos[0].start,
+                                                             stop=pos[0].end)
+        start1, stop1, step1, length1 = slice.adjust_indices(self.shape[1],
+                                                             start=pos[1].start,
+                                                             stop=pos[1].end)
+        if x.shape[0] != length0 or x.shape[1] != length1:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {(length0, length1)}"
+            )
+        for idx0, i in enumerate(range(start0, stop0, step0)):
+            for idx1, j in enumerate(range(start1, stop1, step1)):
+                self.arr[self._getidx(i, j)] = x[idx0, idx1]
+
+    def __setitem__(self: matrix[T], pos: tuple[eslice, eslice], x: matrix[T]):
+        if x.shape != self.shape:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {self.shape}"
+            )
+        self.arr = copy(x.arr)
+
+    def __setitem__(self: matrix[T], pos: tuple[slice, eslice], x: matrix[T]):
+        start, stop, step, length = slice.adjust_indices(self.shape[0],
+                                                         start=pos[0].start,
+                                                         stop=pos[0].end)
+        if x.shape[0] != length or x.shape[1] != self.shape[1]:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {(length, self.shape[1])}"
+            )
+        for idx, i in enumerate(range(start, stop, step)):
+            for j in range(self.shape[1]):
+                self.arr[self._getidx(i, j)] = x[idx, j]
+
+    def __setitem__(self: matrix[T], pos: tuple[eslice, slice], x: matrix[T]):
+        start, stop, step, length = slice.adjust_indices(self.shape[1],
+                                                         start=pos[1].start,
+                                                         stop=pos[1].end)
+        if x.shape[0] != self.shape[0] or x.shape[1] != length:
+            raise ValueError(
+                f"could not write matrix with shape {x.shape} into " \
+                f"matrix with shape {(self.shape[0], length)}"
+            )
+        for i in range(self.shape[0]):
+            for idx, j in enumerate(range(start, stop, step)):
+                self.arr[self._getidx(i, j)] = x[i, idx]
+
+    def __str__(self: matrix[T]):
+        out = "["
+        for i in range(self.shape[0]):
+            if i != 0:
+                out += " "
+            out += "["
+            for j in range(self.shape[1]):
+                out += (str(self.arr[self._getidx(i, j)]))
+                if j != self.shape[1] - 1:
+                    out += " "
+            out += "]"
+            if i != self.shape[0] - 1:
+                out += "\n"
+        out += "]"
+        return out
+
+    def transpose(self: matrix[T]):
+        return matrix[T](copy(self.arr), (self.shape[1], self.shape[0]),
+                         copy(self._r), copy(self._c))
+
+"""
+Save and load currently only supports matrices of ints
+"""
+
+def save(input: matrix[int], output: str):
+    with open(output, 'w') as f:
+        f.write(f'{input.shape[0]} {input.shape[1]}\n')
+        for i in range(len(input.arr)):
+            f.write(str(input.arr[i]))
+            if i < len(input.arr) - 1:
+                f.write(' ')
+        f.write('\n')
+        for i in range(len(input._c)):
+            f.write(str(input._c[i]))
+            if i < len(input._c) - 1:
+                f.write(' ')
+        f.write('\n')
+        for i in range(len(input._r)):
+            f.write(str(input._r[i]))
+            if i < len(input._r) - 1:
+                f.write(' ')
+
+def load(input: str) -> matrix[int]:
+    f = open(input, 'r')
+    data = f.readlines()
+    f.close()
+    s1 = int(data[0].split(' ')[0])
+    s2 = int(data[0].split(' ')[1])
+    shape = tuple[int, int](s1, s2)
+    _c = [int(x) for x in data[2].split(' ')]
+    _r = [int(x) for x in data[3].split(' ')]
+    arr = array[int](shape[0] * shape[1])
+    for i, elem in enumerate(data[1].split(' ')):
+        arr[i] = int(elem)
+    return matrix[int](arr, shape, _c, _r)
+
+
