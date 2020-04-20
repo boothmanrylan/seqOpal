@@ -13,23 +13,21 @@ Name | Type  | Default | Explanation
  -p  | float | 0.25    | percentage of locations in kmer to use.
  -n  | int   | 8       | number of hashes to use in LDPC matrix.
  -c  | int   | 1       | approximate coverage of reads in fragments.
- -f  | int   | 200     | length of fragments.
- -s  | None  | Unset   | if set, the ldpc matrix will be saved.
- -r  | None  | Unset   | if set, a previous ldpc matrix will be reused.
+ -f  | int   | 64      | length of fragments.
+ -s  | str   | ""      | file to write the ldpc matrix to.
+ -r  | None  | ""      | file to read the ldpc matrix from.
  -S  | None  | Unset   | if set, shuffle the data before writing it out.
 
 -i can also be specified without the option name eg:
 >> seqc main.seq input.fasta -o output.file -l labels.txt -k 16
-If an unamed parameter and -i are both specified, -i takes precedence
+If an unamed parameter and -i are both specified, -i takes precedence.
 
-If -r or -s are set, the input_file with extension changed to '.ldcp' will be
-used to store the ldpc matrix.
-
--S should only be set during training.
+-S should only be set during training when a label file is also given.
 
 If a label file is given, it is expected to contain a single label on each
 line, with the label on line i corresponding to read i in the given input
-fasta file.
+fasta file. The labels will be converted to integers between 1 and k
+inclusive, where there are k different labels.
 
 If the output file or ldpc file already exist, they will be overwritten."""
 
@@ -51,7 +49,7 @@ opts = list[tuple[str, str]]()
 args = list[str]()
 
 try:
-    opts, args = getopt(sys.argv[1:], "i:o:l:k:p:n:c:f:srS")
+    opts, args = getopt(sys.argv[1:], "i:o:l:k:p:n:c:f:s:r:S")
 except GetoptError:
     raise GetoptError('Bad option name.\n' + help)
 
@@ -103,8 +101,10 @@ for opt, val in opts:
                 raise GetoptError('-f fragment_length must be an int.\n' + help)
         case "-s":
             save_ldpc = True
+            ldpc_file = val
         case "-r":
             reuse_ldpc = True
+            ldpc_file = val
         case "-S":
             shuffle = True
         case _:
@@ -113,9 +113,11 @@ for opt, val in opts:
 if input_file == "":
     raise GetoptError('-i input_file must be specified.\n' + help)
 
-path = ''.join(input_file.split('.')[:-1])
-if save_ldpc or reuse_ldpc:
-    ldpc_file =  path + '.ldpc'
+if shuffle and label_file == "":
+    raise GetoptError('-S set, but no label file specified.\n' + help)
+
+if save_ldpc and reuse_ldpc:
+    raise GetoptError('-s and -r cannot both be specified.\n' + help)
 
 if reuse_ldpc:
     try:

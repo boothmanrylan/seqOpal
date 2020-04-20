@@ -47,57 +47,59 @@ def ldpc(k: int, t: int, _m: int) -> matrix[int]:
                 count += 1
     return output
 
-def one_hot_encode(labels) -> list[int]:
+def encode(labels: list[str]) -> list[int]:
     unique_labels = list[str]()
     for elem in labels:
         if elem not in unique_labels:
             unique_labels.append(elem)
-    return [unique_labels.index(x) for x in labels]
+    return [unique_labels.index(x) + 1 for x in labels]
 
 def draw_fragments(sequence: seq, length: int, coverage: int, labels: list[int]) -> tuple[seq, int]:
     global counter
-    if len(sequence) <= length:
+    if len(sequence) <= length or length < 0:
         for i in range(coverage):
             label = labels[counter] if len(labels) > 0 else -1
             yield (sequence, label)
         counter += 1
     else:
-        curr_coverage = 0
-        target_coverage = coverage * len(sequence)
-        while curr_coverage < target_coverage:
+        for i in range(coverage):
             pos = random.randint(0, len(sequence) - length)
             sample = sequence[pos:pos + length]
-            curr_coverage += length
             label = labels[counter] if len(labels) > 0 else -1
             yield (sample, label)
         counter += 1
 
-def custom_split(input: tuple[seq, int], kmer_length: int):
+def get_kmers(input: tuple[seq, int], kmer_length: int) -> tuple[list[seq], int]:
+    output = list[seq]()
     for kmer in split(input[0], kmer_length, 1):
-        yield (kmer, input[1])
+        output.append(kmer)
+    return (output, input[1])
 
-def index_kmer(input: tuple[seq, int], indices: matrix[int]):
+def index_kmers(input: tuple[list[seq], int], indices: matrix[int]) -> tuple[str, int]:
     output = ''
-    for i in range(indices.shape[0]):
-        for j in range(indices.shape[1]):
-            output += str(input[0][indices[i, j]])
-        output += f'{i} '
+    for kmer in input[0]:
+        for i in range(indices.shape[0]):
+            for j in range(indices.shape[1]):
+                output += str(kmer[indices[i, j]])
+            output += ' '
     return (output[:-1], input[1])
 
-def format_sample(input: tuple[str, int]):
+def format_sample(input: tuple[str, int]) -> str:
     """
     formats a sample and optional label for input to vowpal wabbit
     """
+    label = ''
     if input[1] >= 0:
-        return f'{input[1]} | {input[0]}\n'
+        label = f'{input[1]} | '
     else:
-        return f'| {input[0]}\n'
+        label = '| '
+    return label + input[0] + '\n'
 
 def opal(infile: str, outfile: str = "", label_file: str = "",
          ldpc_file: str = "", kmer_length: int = 64, percent_used: float = 0.25,
          num_hashes: int = 8, coverage: int = 15, fragment_length: int = 200,
          save_ldpc: bool = False, reuse_ldpc: bool = False,
-         shuffle: bool = False):
+         shuffle: bool = False, balance: bool = False):
 
     indices = ldpc(kmer_length, int(percent_used * kmer_length), num_hashes)
     if reuse_ldpc:
@@ -110,7 +112,7 @@ def opal(infile: str, outfile: str = "", label_file: str = "",
     encoded_labels = list[int]()
     if label_file != "":
         labels = [x.rstrip('\n') for x in open(label_file, 'r').readlines()]
-        encoded_labels = one_hot_encode(labels)
+        encoded_labels = encode(labels)
 
     f = sys.stdout
     if outfile != "":
@@ -121,8 +123,8 @@ def opal(infile: str, outfile: str = "", label_file: str = "",
         (bio.FASTA(infile, fai=False)
             |> seqs
             |> draw_fragments(fragment_length, coverage, encoded_labels)
-            |> custom_split(kmer_length)
-            |> index_kmer(indices)
+            |> get_kmers(kmer_length)
+            |> index_kmers(indices)
             |> format_sample
             |> output.append)
         random.shuffle(output)
@@ -132,8 +134,8 @@ def opal(infile: str, outfile: str = "", label_file: str = "",
         (bio.FASTA(infile, fai=False)
             |> seqs
             |> draw_fragments(fragment_length, coverage, encoded_labels)
-            |> custom_split(kmer_length)
-            |> index_kmer(indices)
+            |> get_kmers(kmer_length)
+            |> index_kmers(indices)
             |> format_sample
             |> f.write)
 
