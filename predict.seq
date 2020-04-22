@@ -1,0 +1,78 @@
+import sys
+from getopt import getopt, GetoptError
+from opal import predict
+
+help = """
+seqOPAL predict command line handler.
+
+Arguments:
+Name | Type  | Default | Explanation
+-----|-------|---------|---------------
+ -i  | str   |         | input fasta file.
+ -L  | str   |         | the file containing the LDPC matrix.
+ -k  | int   | 64      | length of kmer to use.
+ -r  | None  | Unset   | if set, reverse complements are also used.
+
+-i can also be specified without the option names eg:
+>> seqc predict.seq input.fasta -k 16
+If it is specified with and without a name, the named parameter is used.
+
+-L should be the same as the -L or -S that was used during training.
+
+-k and -r should be the same as was used during training."""
+
+input_file = ""
+ldpc_file = ""
+kmer_length = 64
+reverse_complement = False
+
+opts = list[tuple[str, str]]()
+args = list[str]()
+
+try:
+    opts, args = getopt(sys.argv[1:], 'i:L:k:r')
+except GetoptError:
+    raise GetoptError('Bad option name.\n' + help)
+
+if len(args) == 1:
+    input_file = args[0]
+elif len(args) > 0:
+    raise GetoptError('Too many unnamed arguments.\n' + help)
+
+for opt, val in opts:
+    match opt:
+        case '-i':
+            try:
+                f = open(val, 'r')
+                f.close()
+            except IOError:
+                raise GetoptError(f'input_file {val} does not exist.\n' + help)
+            input_file = val
+        case '-k':
+            try:
+                kmer_length = int(val)
+            except ValueError:
+                raise GetoptError(f'kmer_length must be an int.\n' + help)
+        case '-r':
+            reverse_complement = True
+        case '-L':
+            try:
+                f = open(val, 'r')
+                f.close()
+            except IOError:
+                raise GetoptError('ldpc_file {val} does not exist.\n' + help)
+            ldpc_file = val
+            reuse_ldpc = True
+        case _ :
+            raise GetoptError(help)
+
+if input_file == '':
+    raise GetoptError('input_file must be specified.\n' + help)
+
+if ldpc_file == '':
+    raise GetoptError('ldpc_file must be specified.\n' + help)
+
+predict(infile=input_file,
+        ldpc_file=ldpc_file,
+        kmer_length=kmer_length,
+        reverse_complement=reverse_complement)

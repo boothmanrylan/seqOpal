@@ -1,0 +1,146 @@
+import sys
+from getopt import getopt, GetoptError
+from opal import train
+
+help = """
+seqOPAL train command line handler.
+
+Arguments:
+Name | Type  | Default | Explanation
+-----|-------|---------|---------------
+ -i  | str   |         | input fasta file.
+ -l  | str   |         | label file, contains labels for training data.
+ -k  | int   | 64      | length of kmer to use.
+ -w  | int   | 16      | length of hashes in LDPC matrix.
+ -n  | int   | 8       | number of hashes to use in LDPC matrix.
+ -c  | float | 1.0     | approximate coverage of reads in fragments.
+ -f  | int   | 200     | length of fragments.
+ -e  | int   | 1       | number of epochs to train.
+ -r  | None  | Unset   | if set, reverse complements are also used.
+ -s  | None  | Unset   | if set, the data is shuffled before bein output.
+ -L  | str   | ''      | if given, the LDPC matrix will be LOADED from this file.
+ -S  | str   | ''      | if given, the LDPC matrix will SAVED to this file.
+
+-i and -l can also be specified without the option names eg:
+>> seqc train.seq input.fasta labels.txt -k 16
+If they are specified with and without names, the named parameter is used.
+
+The label file is expected to contain a single label on each line, with the
+label on line i corresponding to read i in the given input fasta file."""
+
+input_file = ""
+label_file = ""
+kmer_length = 64
+hash_width = 16
+num_hashes = 8
+coverage = 1.0
+fragment_length = 200
+num_epochs = 1
+reverse_complement = False
+shuffle = False
+ldpc_file = ''
+save_ldpc = False
+reuse_ldpc = False
+
+opts = list[tuple[str, str]]()
+args = list[str]()
+
+try:
+    opts, args = getopt(sys.argv[1:], 'i:l:k:w:n:c:f:e:rsL:S:')
+except GetoptError:
+    raise GetoptError('Bad option name.\n' + help)
+
+if len(args) == 1:
+    input_file = args[0]
+elif len(args) == 2:
+    input_file = args[0]
+    label_file = args[1]
+elif len(args) > 0:
+    raise GetoptError('Too many unnamed arguments.\n' + help)
+
+for opt, val in opts:
+    match opt:
+        case '-i':
+            try:
+                f = open(val, 'r')
+                f.close()
+            except IOError:
+                raise GetoptError(f'input_file {val} does not exist.\n' + help)
+            input_file = val
+        case '-l':
+            try:
+                f = open(val, 'r')
+                f.close()
+            except IOError:
+                raise GetoptError(f'label_file {val} does not exist.\n' + help)
+            label_file = val
+        case '-k':
+            try:
+                kmer_length = int(val)
+            except ValueError:
+                raise GetoptError(f'kmer_length must be an int.\n' + help)
+        case '-w':
+            try:
+                hash_width = int(val)
+            except ValueError:
+                raise GetoptError('hash_width must be an int.\n' + help)
+        case '-n':
+            try:
+                num_hashes = int(val)
+            except ValueError:
+                raise GetoptError('num_hashes must be an int.\n' + help)
+        case '-c':
+            try:
+                coverage = float(val)
+            except ValueError:
+                raise GetoptError('coverage must be an float.\n' + help)
+        case '-f':
+            try:
+                fragment_length = int(val)
+            except ValueError:
+                raise GetoptError('fragment_length must be an int.\n' + help)
+        case '-e':
+            try:
+                num_epocs = int(val)
+            except ValueError:
+                raise GetoptError('num_epochs must be an int.\n' + help)
+        case '-r':
+            reverse_complement = True
+        case '-s':
+            shuffle = True
+        case '-L':
+            try:
+                f = open(val, 'r')
+                f.close()
+            except IOError:
+                raise GetoptError('ldpc_file {val} does not exist.\n' + help)
+            ldpc_file = val
+            reuse_ldpc = True
+        case '-S':
+            ldpc_file = val
+            save_ldpc = True
+        case _ :
+            raise GetoptError(help)
+
+if input_file == '':
+    raise GetoptError('input_file must be specified.\n' + help)
+
+if label_file == '':
+    raise GetoptError('label_file must be specified.\n' + help)
+
+if save_ldpc and reuse_ldpc:
+    raise GetoptError('cannot set both -L and -S.\n' + help)
+
+train(infile=input_file,
+      labelfile=label_file,
+      ldpc_file=ldpc_file,
+      kmer_length=kmer_length,
+      hash_width=hash_width,
+      num_hashes=num_hashes,
+      coverage=coverage,
+      fragment_length=fragment_length,
+      save_ldpc=save_ldpc,
+      reuse_ldpc=reuse_ldpc,
+      shuffle=shuffle,
+      reverse_complement=reverse_complement,
+      num_epochs=num_epochs)
