@@ -47,7 +47,7 @@ def ldpc(k: int, t: int, _m: int) -> matrix[int]:
                 count += 1
     return output
 
-def encode(labels) -> list[int]:
+def encode(labels: list[str]) -> list[int]:
     unique_labels = list[str]()
     for elem in labels:
         if elem not in unique_labels:
@@ -92,12 +92,11 @@ def train_features(input: tuple[seq, int], indices: matrix[int],
 
 def predict_features(input: seq, indices: matrix[int],
                  kmer_length: int, reverse: bool) -> tuple[list[str], int]:
-    return train_features((seq, -1), indices, kmer_length, reverse)
+    return train_features((input, -1), indices, kmer_length, reverse)
 
 def format_sample(input: tuple[list[str], int]) -> str:
     features = ' '.join(input[0])
     label = f'{input[1]} | ' if input[1] > 0 else '| '
-    print(features)
     return label + features
 
 def train(infile: str, labelfile: str, ldpc_file: str, kmer_length: int,
