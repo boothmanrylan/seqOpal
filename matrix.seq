@@ -320,20 +320,12 @@ Save and load currently only supports matrices of ints
 def save(input: matrix[int], output: str):
     with open(output, 'w') as f:
         f.write(f'{input.shape[0]} {input.shape[1]}\n')
-        for i in range(len(input.arr)):
-            f.write(str(input.arr[i]))
-            if i < len(input.arr) - 1:
-                f.write(' ')
-        f.write('\n')
-        for i in range(len(input._c)):
-            f.write(str(input._c[i]))
-            if i < len(input._c) - 1:
-                f.write(' ')
-        f.write('\n')
-        for i in range(len(input._r)):
-            f.write(str(input._r[i]))
-            if i < len(input._r) - 1:
-                f.write(' ')
+        for i in range(input.shape[0]):
+            for j in range(input.shape[1]):
+                f.write(str(input[i, j]))
+                if j < input.shape[1] - 1:
+                    f.write(' ')
+            f.write('\n')
 
 def load(input: str) -> matrix[int]:
     f = open(input, 'r')
@@ -341,12 +333,10 @@ def load(input: str) -> matrix[int]:
     f.close()
     s1 = int(data[0].split(' ')[0])
     s2 = int(data[0].split(' ')[1])
-    shape = tuple[int, int](s1, s2)
-    _c = [int(x) for x in data[2].split(' ')]
-    _r = [int(x) for x in data[3].split(' ')]
-    arr = array[int](shape[0] * shape[1])
-    for i, elem in enumerate(data[1].split(' ')):
-        arr[i] = int(elem)
-    return matrix[int](arr, shape, _c, _r)
+    m = matrix[int]((s1, s2), 0)
+    for i in range(s1):
+        for j in range(s2):
+            m[i, j] = int(data[i + 1].split(' ')[j])
+    return m
 
 
