@@ -81,10 +81,10 @@ def _gen_features(sequence: seq, indices: matrix[int], kmer_length):
             for j in range(indices.shape[1]):
                 curr += str(sequence[indices[i, j]])
             output.append(curr + str(i))
-        return output
+    return output
 
 def train_features(input: tuple[seq, int], indices: matrix[int],
-                 kmer_length: int, reverse: bool) -> tuple[list[str], int]:
+                   kmer_length: int, reverse: bool) -> tuple[list[str], int]:
     features = _gen_features(input[0], indices, kmer_length)
     if reverse:
         features.ext(_gen_features(~input[0], indices, kmer_length))
