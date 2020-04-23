@@ -7,9 +7,9 @@ encoded_labels = encode(true_labels)
 predictions = [int(x) for x in open(sys.argv[2], 'r').readlines()]
 
 assert len(predictions) == len(encoded_labels)
-correct = 0
+correct = 0.0
 for i, p in enumerate(predictions):
     if p == encoded_labels[i]:
-        correct += 1
-accuracy = (correct * 1.0) / (len(predictions) * 1.0)
+        correct += 1.0
+accuracy = correct / len(predictions) * 1.0
 print(accuracy)
