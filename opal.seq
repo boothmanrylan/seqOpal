@@ -4,7 +4,8 @@ import random
 import sys
 from matrix import matrix, save, load
 
-counter = 0
+counter1 = 0
+counter2 = 0
 
 def ldpc(k: int, t: int, _m: int) -> matrix[int]:
     """
@@ -54,24 +55,20 @@ def encode(labels: list[str]) -> list[int]:
             unique_labels.append(elem)
     return [unique_labels.index(x) + 1 for x in labels]
 
-def fragment(input: seq, labels: list[int], length: int, coverage: float):
-    global counter
-    label = labels[counter]
-    counter += 1
-    if len(input) < length:
-        print(len(input), length)
-        raise ValueError('shit')
-    try_num = 0
-    curr_coverage = 0
-    desired_coverage = coverage * len(input)
-    while curr_coverage < desired_coverage:
-        curr_coverage += length
-        try_num += 1
-        pos = random.randint(0, len(input) - length)
-        sample = input[pos:pos + length]
-        yield (sample, label)
-        if try_num > 10 * len(input):
-            break
+@atomic
+def get_label(input: seq, labels: list[int]) -> tuple[seq, int]:
+    global counter1
+    label = labels[counter1]
+    counter1 += 1
+    return (input, label)
+
+def fragment(input: tuple[seq, int], length: int, coverage: float):
+    sequence, label = input
+    seq_len = len(sequence)
+    assert seq_len >= length
+    for _ in range(int((coverage * seq_len) // length)):
+        pos = random.randint(0, seq_len - length - 1)
+        yield (sequence[pos:pos + length], label)
 
 def _gen_features(sequence: seq, indices: matrix[int], kmer_length):
     output = list[str]()
@@ -85,10 +82,11 @@ def _gen_features(sequence: seq, indices: matrix[int], kmer_length):
 
 def train_features(input: tuple[seq, int], indices: matrix[int],
                    kmer_length: int, reverse: bool) -> tuple[list[str], int]:
-    features = _gen_features(input[0], indices, kmer_length)
+    sequence, label = input
+    features = _gen_features(sequence, indices, kmer_length)
     if reverse:
-        features.ext(_gen_features(~input[0], indices, kmer_length))
-    return (features, input[1])
+        features.ext(_gen_features(~sequence, indices, kmer_length))
+    return (features, label)
 
 def predict_features(input: seq, indices: matrix[int],
                  kmer_length: int, reverse: bool) -> tuple[list[str], int]:
@@ -99,11 +97,18 @@ def format_sample(input: tuple[list[str], int]) -> str:
     label = f'{input[1]} | ' if input[1] > 0 else '| '
     return label + features
 
+@atomic
+def store(input: str, output: array[str]):
+    global counter2
+    output[counter2] = input
+    counter2 += 1
+
 def train(infile: str, labelfile: str, ldpc_file: str, kmer_length: int,
           hash_width: int, num_hashes: int, coverage: float,
           fragment_length: int, save_ldpc: bool, reuse_ldpc: bool,
           shuffle: bool, reverse_complement: bool, num_epochs: int):
 
+    global counter1, counter2
     indices = None
     if reuse_ldpc:
         indices = load(ldpc_file)
@@ -118,20 +123,32 @@ def train(infile: str, labelfile: str, ldpc_file: str, kmer_length: int,
         labels = [x.rstrip('\n') for x in open(labelfile, 'r').readlines()]
         encoded_labels = encode(labels)
 
+    # slight overhead, but allows pipeline to be parallized
+    num_reads = 0
+    max_read = 0
+    for read in bio.FASTA(infile, fai=False):
+        num_reads += 1
+        seq_len = len(read.seq)
+        if seq_len > max_read:
+            max_read = seq_len
+    max_samples = int((num_reads * coverage * max_read) / fragment_length)
+
     for _ in range(num_epochs):
-        global counter
-        counter = 0
-        output = list[str]()
+        counter1 = 0
+        counter2 = 0
+        output = array[str](max_samples)
         (bio.FASTA(infile, fai=False)
             |> seqs
-            |> fragment(encoded_labels, fragment_length, coverage)
-            |> train_features(indices, kmer_length, reverse_complement)
+            |> get_label(encoded_labels)
+            |> fragment(fragment_length, coverage)
+            ||> train_features(indices, kmer_length, reverse_complement)
             |> format_sample
-            |> output.append)
+            |> store(output))
+        idx = list(range(counter2))
         if shuffle:
-            random.shuffle(output)
-        for elem in output:
-            print(elem)
+            random.shuffle(idx)
+        for i in idx:
+            print(output[i])
 
 def predict(infile: str, ldpc_file: str, kmer_length: int,
             reverse_complement: bool):
